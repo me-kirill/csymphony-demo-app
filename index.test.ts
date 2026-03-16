@@ -8,6 +8,9 @@ const server = Bun.serve({
     "/api/health": new Response(JSON.stringify({ status: "ok" }), {
       headers: { "Content-Type": "application/json" },
     }),
+    "/api/version": new Response(JSON.stringify({ version: "1.0.0" }), {
+      headers: { "Content-Type": "application/json" },
+    }),
   },
 });
 
@@ -28,5 +31,12 @@ describe("Hello World server", () => {
     const json = await response.json();
     expect(response.status).toBe(200);
     expect(json).toEqual({ status: "ok" });
+  });
+
+  test("/api/version returns version 1.0.0", async () => {
+    const response = await fetch(`http://localhost:${server.port}/api/version`);
+    const json = await response.json();
+    expect(response.status).toBe(200);
+    expect(json).toEqual({ version: "1.0.0" });
   });
 });

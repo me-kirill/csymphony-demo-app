@@ -7,6 +7,9 @@ const server = Bun.serve({
     "/api/health": new Response(JSON.stringify({ status: "ok" }), {
       headers: { "Content-Type": "application/json" },
     }),
+    "/api/version": new Response(JSON.stringify({ version: "1.0.0" }), {
+      headers: { "Content-Type": "application/json" },
+    }),
   },
   development: {
     hmr: true,
