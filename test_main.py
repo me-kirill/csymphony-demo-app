@@ -31,3 +31,36 @@ def test_landing_contains_current_time():
 def test_landing_includes_tailwind():
     response = client.get("/")
     assert "tailwindcss" in response.text
+
+
+def test_contact_page_returns_html():
+    response = client.get("/contact")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+
+
+def test_contact_page_contains_form():
+    response = client.get("/contact")
+    assert "Contact Us" in response.text
+    assert 'name="name"' in response.text
+    assert 'name="email"' in response.text
+    assert 'name="message"' in response.text
+    assert 'action="/api/contact"' in response.text
+
+
+def test_contact_page_dark_theme():
+    response = client.get("/contact")
+    assert "bg-gray-900" in response.text
+
+
+def test_contact_submit():
+    response = client.post(
+        "/api/contact",
+        data={"name": "Alice", "email": "alice@example.com", "message": "Hello!"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ok"
+    assert data["name"] == "Alice"
+    assert data["email"] == "alice@example.com"
+    assert data["message"] == "Hello!"
