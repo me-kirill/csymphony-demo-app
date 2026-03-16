@@ -31,3 +31,20 @@ def test_landing_contains_current_time():
 def test_landing_includes_tailwind():
     response = client.get("/")
     assert "tailwindcss" in response.text
+
+
+def test_about_returns_html():
+    response = client.get("/about")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+
+
+def test_about_contains_project_info():
+    response = client.get("/about")
+    assert "CSymphony Demo" in response.text
+    assert "v0.1.0" in response.text
+
+
+def test_about_has_dark_theme():
+    response = client.get("/about")
+    assert "bg-gray-950" in response.text
