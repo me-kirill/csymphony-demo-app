@@ -1,9 +1,36 @@
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, Form
+from fastapi import FastAPI, Form, Request
+from fastapi.exceptions import StarletteHTTPException
 from fastapi.responses import HTMLResponse
 
 app = FastAPI()
+
+
+@app.exception_handler(404)
+def not_found(request: Request, exc: StarletteHTTPException):
+    return HTMLResponse(
+        status_code=404,
+        content="""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>404 — Not Found</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-950 min-h-screen flex items-center justify-center">
+    <div class="bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl p-10 max-w-md text-center">
+        <p class="text-6xl font-extrabold text-indigo-500 mb-4">404</p>
+        <h1 class="text-2xl font-bold text-white mb-2">Page not found</h1>
+        <p class="text-gray-400 mb-8">Sorry, we couldn't find the page you're looking for.</p>
+        <a href="/" class="inline-block px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg transition-colors duration-200">
+            Go Home
+        </a>
+    </div>
+</body>
+</html>""",
+    )
 
 
 @app.get("/api/ping")

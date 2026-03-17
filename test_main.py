@@ -81,3 +81,25 @@ def test_about_contains_project_info():
 def test_about_has_dark_theme():
     response = client.get("/about")
     assert "bg-gray-950" in response.text
+
+
+def test_404_returns_html():
+    response = client.get("/nonexistent")
+    assert response.status_code == 404
+    assert "text/html" in response.headers["content-type"]
+
+
+def test_404_contains_friendly_message():
+    response = client.get("/nonexistent")
+    assert "404" in response.text
+    assert "Page not found" in response.text
+
+
+def test_404_has_dark_theme():
+    response = client.get("/nonexistent")
+    assert "bg-gray-950" in response.text
+
+
+def test_404_has_home_link():
+    response = client.get("/nonexistent")
+    assert 'href="/"' in response.text
