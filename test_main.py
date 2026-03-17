@@ -81,3 +81,24 @@ def test_about_contains_project_info():
 def test_about_has_dark_theme():
     response = client.get("/about")
     assert "bg-gray-950" in response.text
+
+
+def test_stats_returns_expected_fields():
+    response = client.get("/api/stats")
+    assert response.status_code == 200
+    data = response.json()
+    assert "uptime" in data
+    assert "uptime_seconds" in data
+    assert "memory_mb" in data
+    assert "requests_served" in data
+    assert isinstance(data["memory_mb"], float)
+    assert data["uptime_seconds"] >= 0
+    assert data["requests_served"] >= 1
+
+
+def test_dashboard_returns_html():
+    response = client.get("/dashboard")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "System Dashboard" in response.text
+    assert "/api/stats" in response.text
