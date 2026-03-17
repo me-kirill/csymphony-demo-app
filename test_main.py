@@ -102,3 +102,19 @@ def test_dashboard_returns_html():
     assert "text/html" in response.headers["content-type"]
     assert "System Dashboard" in response.text
     assert "/api/stats" in response.text
+
+
+def test_nav_present_on_all_pages():
+    for path in ["/", "/about", "/contact", "/dashboard"]:
+        response = client.get(path)
+        assert "<nav" in response.text, f"nav missing on {path}"
+        assert 'href="/"' in response.text, f"Home link missing on {path}"
+        assert 'href="/dashboard"' in response.text, f"Dashboard link missing on {path}"
+        assert 'href="/about"' in response.text, f"About link missing on {path}"
+        assert 'href="/contact"' in response.text, f"Contact link missing on {path}"
+
+
+def test_nav_highlights_current_page():
+    response = client.get("/about")
+    assert 'href="/about" class="text-white font-semibold"' in response.text
+    assert 'href="/" class="text-gray-400' in response.text

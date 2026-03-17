@@ -11,6 +11,29 @@ app = FastAPI()
 _start_time = time.time()
 _request_count = 0
 
+_NAV_LINKS = [
+    ("/", "Home"),
+    ("/dashboard", "Dashboard"),
+    ("/about", "About"),
+    ("/contact", "Contact"),
+]
+
+
+def _nav_html(current_path: str) -> str:
+    links = []
+    for href, label in _NAV_LINKS:
+        if href == current_path:
+            cls = "text-white font-semibold"
+        else:
+            cls = "text-gray-400 hover:text-white transition-colors"
+        links.append(f'<a href="{href}" class="{cls}">{label}</a>')
+    return (
+        '<nav class="fixed top-0 left-0 right-0 bg-gray-900/80 backdrop-blur border-b border-gray-800 z-50">'
+        '<div class="max-w-4xl mx-auto px-6 py-3 flex gap-6">'
+        + "".join(links)
+        + "</div></nav>"
+    )
+
 
 @app.middleware("http")
 async def count_requests(request: Request, call_next):
@@ -41,7 +64,8 @@ def stats():
 
 @app.get("/about", response_class=HTMLResponse)
 def about():
-    return """<!DOCTYPE html>
+    nav = _nav_html("/about")
+    return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -49,7 +73,8 @@ def about():
     <title>About</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-950 min-h-screen flex items-center justify-center">
+<body class="bg-gray-950 min-h-screen flex items-center justify-center pt-14">
+    {nav}
     <div class="bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl p-10 max-w-md text-center">
         <h1 class="text-4xl font-bold text-white mb-2">CSymphony Demo</h1>
         <p class="text-sm text-gray-500 mb-6">v0.1.0</p>
@@ -57,9 +82,6 @@ def about():
             A lightweight demo application built with FastAPI and Tailwind CSS,
             showcasing modern web development practices with a clean, minimal interface.
         </p>
-        <div class="mt-8">
-            <a href="/" class="text-indigo-400 hover:text-indigo-300 text-sm transition-colors">&larr; Back to Home</a>
-        </div>
     </div>
 </body>
 </html>"""
@@ -68,6 +90,7 @@ def about():
 @app.get("/", response_class=HTMLResponse)
 def landing():
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    nav = _nav_html("/")
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -76,7 +99,8 @@ def landing():
     <title>Welcome</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gradient-to-br from-indigo-500 to-purple-600 min-h-screen flex items-center justify-center">
+<body class="bg-gradient-to-br from-indigo-500 to-purple-600 min-h-screen flex items-center justify-center pt-14">
+    {nav}
     <div class="bg-white rounded-2xl shadow-xl p-10 max-w-md text-center">
         <h1 class="text-4xl font-bold text-gray-800 mb-4">Welcome!</h1>
         <p class="text-gray-500 mb-6">Glad to have you here.</p>
@@ -91,7 +115,8 @@ def landing():
 
 @app.get("/contact", response_class=HTMLResponse)
 def contact_page():
-    return """<!DOCTYPE html>
+    nav = _nav_html("/contact")
+    return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -99,7 +124,8 @@ def contact_page():
     <title>Contact Us</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-900 min-h-screen flex items-center justify-center px-4">
+<body class="bg-gray-900 min-h-screen flex items-center justify-center px-4 pt-14">
+    {nav}
     <div class="bg-gray-800 rounded-2xl shadow-2xl p-10 max-w-lg w-full">
         <h1 class="text-3xl font-bold text-white mb-2">Contact Us</h1>
         <p class="text-gray-400 mb-8">We'd love to hear from you. Send us a message below.</p>
@@ -137,8 +163,10 @@ def contact_submit(name: str = Form(), email: str = Form(), message: str = Form(
     return {"status": "ok", "name": name, "email": email, "message": message}
 
 
-_DASHBOARD_HTML = """\
-<!DOCTYPE html>
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard():
+    nav = _nav_html("/dashboard")
+    return f"""<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
   <meta charset="UTF-8"/>
@@ -146,7 +174,8 @@ _DASHBOARD_HTML = """\
   <title>Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-950 text-gray-100 min-h-screen flex items-center justify-center">
+<body class="bg-gray-950 text-gray-100 min-h-screen flex items-center justify-center pt-14">
+  {nav}
   <div class="max-w-4xl w-full px-6">
     <h1 class="text-3xl font-bold text-center mb-8">System Dashboard</h1>
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
@@ -165,23 +194,17 @@ _DASHBOARD_HTML = """\
     </div>
   </div>
   <script>
-    async function refresh() {
-      try {
+    async function refresh() {{
+      try {{
         const r = await fetch('/api/stats');
         const d = await r.json();
         document.getElementById('uptime').textContent = d.uptime;
         document.getElementById('memory').textContent = d.memory_mb + ' MB';
         document.getElementById('requests').textContent = d.requests_served;
-      } catch {}
-    }
+      }} catch {{}}
+    }}
     refresh();
     setInterval(refresh, 5000);
   </script>
 </body>
-</html>
-"""
-
-
-@app.get("/dashboard", response_class=HTMLResponse)
-def dashboard():
-    return _DASHBOARD_HTML
+</html>"""
