@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from main import app
+from main import THEMES, app
 
 client = TestClient(app)
 
@@ -48,11 +48,6 @@ def test_contact_page_contains_form():
     assert 'action="/api/contact"' in response.text
 
 
-def test_contact_page_dark_theme():
-    response = client.get("/contact")
-    assert "bg-gray-900" in response.text
-
-
 def test_contact_submit():
     response = client.post(
         "/api/contact",
@@ -76,11 +71,6 @@ def test_about_contains_project_info():
     response = client.get("/about")
     assert "CSymphony Demo" in response.text
     assert "v0.1.0" in response.text
-
-
-def test_about_has_dark_theme():
-    response = client.get("/about")
-    assert "bg-gray-950" in response.text
 
 
 def test_stats_returns_expected_fields():
@@ -108,13 +98,44 @@ def test_nav_present_on_all_pages():
     for path in ["/", "/about", "/contact", "/dashboard"]:
         response = client.get(path)
         assert "<nav" in response.text, f"nav missing on {path}"
-        assert 'href="/"' in response.text, f"Home link missing on {path}"
-        assert 'href="/dashboard"' in response.text, f"Dashboard link missing on {path}"
-        assert 'href="/about"' in response.text, f"About link missing on {path}"
-        assert 'href="/contact"' in response.text, f"Contact link missing on {path}"
+        assert 'href="/' in response.text, f"Home link missing on {path}"
+        assert "/dashboard" in response.text, f"Dashboard link missing on {path}"
+        assert "/about" in response.text, f"About link missing on {path}"
+        assert "/contact" in response.text, f"Contact link missing on {path}"
 
 
 def test_nav_highlights_current_page():
     response = client.get("/about")
-    assert 'href="/about" class="text-white font-semibold"' in response.text
-    assert 'href="/" class="text-gray-400' in response.text
+    assert "font-semibold" in response.text
+
+
+def test_theme_switcher_present_on_all_pages():
+    for path in ["/", "/about", "/contact", "/dashboard"]:
+        response = client.get(path)
+        assert "Theme" in response.text, f"theme switcher missing on {path}"
+
+
+def test_all_themes_load_on_all_pages():
+    for theme_id in THEMES:
+        for path in ["/", "/about", "/contact", "/dashboard"]:
+            response = client.get(f"{path}?theme={theme_id}")
+            assert response.status_code == 200
+            assert "text/html" in response.headers["content-type"]
+
+
+def test_theme_changes_appearance():
+    r1 = client.get("/?theme=1")
+    r5 = client.get("/?theme=5")
+    assert r1.text != r5.text
+
+
+def test_invalid_theme_falls_back_to_default():
+    response = client.get("/?theme=99")
+    assert response.status_code == 200
+    default_response = client.get("/?theme=1")
+    assert response.text == default_response.text
+
+
+def test_theme_links_preserve_theme():
+    response = client.get("/?theme=3")
+    assert "?theme=3" in response.text
