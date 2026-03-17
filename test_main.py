@@ -132,7 +132,7 @@ def test_theme_changes_appearance():
 def test_invalid_theme_falls_back_to_default():
     response = client.get("/?theme=99")
     assert response.status_code == 200
-    default_response = client.get("/?theme=1")
+    default_response = client.get("/")
     assert response.text == default_response.text
 
 
