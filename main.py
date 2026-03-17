@@ -1,15 +1,21 @@
 import os
+import sqlite3
 import time
 from datetime import datetime, timezone
 
+import bcrypt
 import psutil
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
+from itsdangerous import URLSafeSerializer
 
 app = FastAPI()
 
 _start_time = time.time()
 _request_count = 0
+_SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key-change-in-production")
+_serializer = URLSafeSerializer(_SECRET_KEY)
+_DB_PATH = os.environ.get("DB_PATH", "users.db")
 
 _NAV_LINKS = [
     ("/", "Home"),
@@ -19,7 +25,33 @@ _NAV_LINKS = [
 ]
 
 
-def _nav_html(current_path: str) -> str:
+def _get_db() -> sqlite3.Connection:
+    conn = sqlite3.connect(_DB_PATH)
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS users ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "username TEXT UNIQUE NOT NULL,"
+        "email TEXT UNIQUE NOT NULL,"
+        "password_hash TEXT NOT NULL"
+        ")"
+    )
+    conn.commit()
+    return conn
+
+
+def _get_current_user(request: Request) -> dict | None:
+    token = request.cookies.get("session")
+    if not token:
+        return None
+    try:
+        data = _serializer.loads(token)
+        return data
+    except Exception:
+        return None
+
+
+def _nav_html(current_path: str, user: dict | None = None) -> str:
     links = []
     for href, label in _NAV_LINKS:
         if href == current_path:
@@ -27,11 +59,27 @@ def _nav_html(current_path: str) -> str:
         else:
             cls = "text-gray-400 hover:text-white transition-colors"
         links.append(f'<a href="{href}" class="{cls}">{label}</a>')
+
+    if user:
+        auth_html = (
+            f'<span class="text-gray-300 text-sm">Hello, {user["username"]}</span>'
+            '<a href="/logout" class="text-gray-400 hover:text-white transition-colors text-sm">Logout</a>'
+        )
+    else:
+        login_cls = "text-white font-semibold" if current_path == "/login" else "text-gray-400 hover:text-white transition-colors"
+        register_cls = "text-white font-semibold" if current_path == "/register" else "text-gray-400 hover:text-white transition-colors"
+        auth_html = (
+            f'<a href="/login" class="{login_cls}">Login</a>'
+            f'<a href="/register" class="{register_cls}">Register</a>'
+        )
+
     return (
         '<nav class="fixed top-0 left-0 right-0 bg-gray-900/80 backdrop-blur border-b border-gray-800 z-50">'
         '<div class="max-w-4xl mx-auto px-6 py-3 flex gap-6">'
         + "".join(links)
-        + "</div></nav>"
+        + '<div class="ml-auto flex gap-4 items-center">'
+        + auth_html
+        + "</div></div></nav>"
     )
 
 
@@ -63,8 +111,9 @@ def stats():
 
 
 @app.get("/about", response_class=HTMLResponse)
-def about():
-    nav = _nav_html("/about")
+def about(request: Request):
+    user = _get_current_user(request)
+    nav = _nav_html("/about", user)
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -88,9 +137,10 @@ def about():
 
 
 @app.get("/", response_class=HTMLResponse)
-def landing():
+def landing(request: Request):
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-    nav = _nav_html("/")
+    user = _get_current_user(request)
+    nav = _nav_html("/", user)
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -114,8 +164,9 @@ def landing():
 
 
 @app.get("/contact", response_class=HTMLResponse)
-def contact_page():
-    nav = _nav_html("/contact")
+def contact_page(request: Request):
+    user = _get_current_user(request)
+    nav = _nav_html("/contact", user)
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -164,8 +215,9 @@ def contact_submit(name: str = Form(), email: str = Form(), message: str = Form(
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
-def dashboard():
-    nav = _nav_html("/dashboard")
+def dashboard(request: Request):
+    user = _get_current_user(request)
+    nav = _nav_html("/dashboard", user)
     return f"""<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
@@ -208,3 +260,155 @@ def dashboard():
   </script>
 </body>
 </html>"""
+
+
+def _auth_page(title: str, form_action: str, fields: str, submit_label: str,
+               footer: str, error: str = "", user: dict | None = None) -> str:
+    nav = _nav_html(form_action, user)
+    error_html = (
+        f'<div class="bg-red-900/50 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm mb-4">{error}</div>'
+        if error else ""
+    )
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{title}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-950 min-h-screen flex items-center justify-center px-4 pt-14">
+    {nav}
+    <div class="bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl p-10 max-w-md w-full">
+        <h1 class="text-3xl font-bold text-white mb-2">{title}</h1>
+        {error_html}
+        <form method="POST" action="{form_action}" class="space-y-6 mt-6">
+            {fields}
+            <button type="submit"
+                class="w-full py-3 px-6 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-900">
+                {submit_label}
+            </button>
+        </form>
+        <p class="mt-6 text-center text-gray-500 text-sm">{footer}</p>
+    </div>
+</body>
+</html>"""
+
+
+def _input_field(name: str, label: str, type_: str = "text", placeholder: str = "") -> str:
+    return (
+        f'<div>'
+        f'<label for="{name}" class="block text-sm font-medium text-gray-300 mb-1">{label}</label>'
+        f'<input type="{type_}" id="{name}" name="{name}" required '
+        f'class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 '
+        f'focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" '
+        f'placeholder="{placeholder}">'
+        f'</div>'
+    )
+
+
+@app.get("/register", response_class=HTMLResponse)
+def register_page(request: Request):
+    user = _get_current_user(request)
+    if user:
+        return RedirectResponse("/", status_code=302)
+    fields = (
+        _input_field("username", "Username", placeholder="Choose a username")
+        + _input_field("email", "Email", "email", "you@example.com")
+        + _input_field("password", "Password", "password", "Create a password")
+    )
+    return _auth_page(
+        "Register", "/register", fields, "Create Account",
+        'Already have an account? <a href="/login" class="text-indigo-400 hover:text-indigo-300">Login</a>',
+        user=user,
+    )
+
+
+@app.post("/register", response_class=HTMLResponse)
+def register_submit(
+    request: Request,
+    username: str = Form(),
+    email: str = Form(),
+    password: str = Form(),
+):
+    fields = (
+        _input_field("username", "Username", placeholder="Choose a username")
+        + _input_field("email", "Email", "email", "you@example.com")
+        + _input_field("password", "Password", "password", "Create a password")
+    )
+    footer = 'Already have an account? <a href="/login" class="text-indigo-400 hover:text-indigo-300">Login</a>'
+
+    if len(username) < 3:
+        return _auth_page("Register", "/register", fields, "Create Account", footer,
+                          error="Username must be at least 3 characters.")
+    if len(password) < 6:
+        return _auth_page("Register", "/register", fields, "Create Account", footer,
+                          error="Password must be at least 6 characters.")
+
+    db = _get_db()
+    try:
+        password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+        db.execute(
+            "INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)",
+            (username, email, password_hash),
+        )
+        db.commit()
+    except sqlite3.IntegrityError:
+        db.close()
+        return _auth_page("Register", "/register", fields, "Create Account", footer,
+                          error="Username or email already taken.")
+    db.close()
+
+    token = _serializer.dumps({"username": username, "email": email})
+    response = RedirectResponse("/", status_code=302)
+    response.set_cookie("session", token, httponly=True, samesite="lax", max_age=86400 * 7)
+    return response
+
+
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request):
+    user = _get_current_user(request)
+    if user:
+        return RedirectResponse("/", status_code=302)
+    fields = (
+        _input_field("username", "Username", placeholder="Your username")
+        + _input_field("password", "Password", "password", "Your password")
+    )
+    return _auth_page(
+        "Login", "/login", fields, "Sign In",
+        'Don\'t have an account? <a href="/register" class="text-indigo-400 hover:text-indigo-300">Register</a>',
+        user=user,
+    )
+
+
+@app.post("/login", response_class=HTMLResponse)
+def login_submit(
+    request: Request,
+    username: str = Form(),
+    password: str = Form(),
+):
+    fields = (
+        _input_field("username", "Username", placeholder="Your username")
+        + _input_field("password", "Password", "password", "Your password")
+    )
+    footer = 'Don\'t have an account? <a href="/register" class="text-indigo-400 hover:text-indigo-300">Register</a>'
+
+    db = _get_db()
+    row = db.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+    db.close()
+
+    if not row or not bcrypt.checkpw(password.encode(), row["password_hash"].encode()):
+        return _auth_page("Login", "/login", fields, "Sign In", footer,
+                          error="Invalid username or password.")
+
+    token = _serializer.dumps({"username": row["username"], "email": row["email"]})
+    response = RedirectResponse("/", status_code=302)
+    response.set_cookie("session", token, httponly=True, samesite="lax", max_age=86400 * 7)
+    return response
+
+
+@app.get("/logout")
+def logout():
+    response = RedirectResponse("/", status_code=302)
+    response.delete_cookie("session")
+    return response

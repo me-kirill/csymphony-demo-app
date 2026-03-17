@@ -1,8 +1,20 @@
+import os
+
+# Use a temporary test database
+os.environ["DB_PATH"] = "test_users.db"
+
 from fastapi.testclient import TestClient
 
-from main import app
+from main import app, _get_db
 
 client = TestClient(app)
+
+
+def _cleanup_db():
+    db = _get_db()
+    db.execute("DELETE FROM users")
+    db.commit()
+    db.close()
 
 
 def test_ping_returns_pong():
@@ -118,3 +130,169 @@ def test_nav_highlights_current_page():
     response = client.get("/about")
     assert 'href="/about" class="text-white font-semibold"' in response.text
     assert 'href="/" class="text-gray-400' in response.text
+
+
+# --- Auth tests ---
+
+
+def test_register_page_returns_html():
+    response = client.get("/register")
+    assert response.status_code == 200
+    assert "Register" in response.text
+    assert 'name="username"' in response.text
+    assert 'name="email"' in response.text
+    assert 'name="password"' in response.text
+
+
+def test_login_page_returns_html():
+    response = client.get("/login")
+    assert response.status_code == 200
+    assert "Login" in response.text
+    assert 'name="username"' in response.text
+    assert 'name="password"' in response.text
+
+
+def test_register_creates_user():
+    _cleanup_db()
+    response = client.post(
+        "/register",
+        data={"username": "testuser", "email": "test@example.com", "password": "secret123"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+    assert response.headers["location"] == "/"
+    assert "session" in response.cookies
+
+
+def test_register_duplicate_username():
+    _cleanup_db()
+    client.post(
+        "/register",
+        data={"username": "dupuser", "email": "dup@example.com", "password": "secret123"},
+        follow_redirects=False,
+    )
+    response = client.post(
+        "/register",
+        data={"username": "dupuser", "email": "dup2@example.com", "password": "secret123"},
+    )
+    assert response.status_code == 200
+    assert "already taken" in response.text
+
+
+def test_register_short_username():
+    response = client.post(
+        "/register",
+        data={"username": "ab", "email": "short@example.com", "password": "secret123"},
+    )
+    assert response.status_code == 200
+    assert "at least 3 characters" in response.text
+
+
+def test_register_short_password():
+    response = client.post(
+        "/register",
+        data={"username": "validuser", "email": "valid@example.com", "password": "12345"},
+    )
+    assert response.status_code == 200
+    assert "at least 6 characters" in response.text
+
+
+def test_login_valid_credentials():
+    _cleanup_db()
+    client.post(
+        "/register",
+        data={"username": "loginuser", "email": "login@example.com", "password": "secret123"},
+        follow_redirects=False,
+    )
+    response = client.post(
+        "/login",
+        data={"username": "loginuser", "password": "secret123"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+    assert "session" in response.cookies
+
+
+def test_login_invalid_password():
+    _cleanup_db()
+    client.post(
+        "/register",
+        data={"username": "wrongpw", "email": "wrong@example.com", "password": "secret123"},
+        follow_redirects=False,
+    )
+    response = client.post(
+        "/login",
+        data={"username": "wrongpw", "password": "wrongpassword"},
+    )
+    assert response.status_code == 200
+    assert "Invalid username or password" in response.text
+
+
+def test_login_nonexistent_user():
+    _cleanup_db()
+    response = client.post(
+        "/login",
+        data={"username": "noone", "password": "whatever"},
+    )
+    assert response.status_code == 200
+    assert "Invalid username or password" in response.text
+
+
+def test_logout_clears_session():
+    _cleanup_db()
+    reg_response = client.post(
+        "/register",
+        data={"username": "logoutuser", "email": "logout@example.com", "password": "secret123"},
+        follow_redirects=False,
+    )
+    client.cookies.set("session", reg_response.cookies.get("session"))
+    response = client.get("/logout", follow_redirects=False)
+    assert response.status_code == 302
+    assert response.headers["location"] == "/"
+
+
+def test_nav_shows_login_register_when_logged_out():
+    client.cookies.clear()
+    response = client.get("/")
+    assert 'href="/login"' in response.text
+    assert 'href="/register"' in response.text
+
+
+def test_nav_shows_username_when_logged_in():
+    _cleanup_db()
+    reg_response = client.post(
+        "/register",
+        data={"username": "navuser", "email": "nav@example.com", "password": "secret123"},
+        follow_redirects=False,
+    )
+    client.cookies.set("session", reg_response.cookies.get("session"))
+    response = client.get("/")
+    assert "Hello, navuser" in response.text
+    assert 'href="/logout"' in response.text
+    client.cookies.clear()
+
+
+def test_logged_in_user_redirected_from_login():
+    _cleanup_db()
+    reg_response = client.post(
+        "/register",
+        data={"username": "rediruser", "email": "redir@example.com", "password": "secret123"},
+        follow_redirects=False,
+    )
+    client.cookies.set("session", reg_response.cookies.get("session"))
+    response = client.get("/login", follow_redirects=False)
+    assert response.status_code == 302
+    client.cookies.clear()
+
+
+def test_logged_in_user_redirected_from_register():
+    _cleanup_db()
+    reg_response = client.post(
+        "/register",
+        data={"username": "rediruser2", "email": "redir2@example.com", "password": "secret123"},
+        follow_redirects=False,
+    )
+    client.cookies.set("session", reg_response.cookies.get("session"))
+    response = client.get("/register", follow_redirects=False)
+    assert response.status_code == 302
+    client.cookies.clear()
