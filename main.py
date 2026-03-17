@@ -371,7 +371,7 @@ def login_page(request: Request):
     if user:
         return RedirectResponse("/", status_code=302)
     fields = (
-        _input_field("username", "Username", placeholder="Your username")
+        _input_field("email", "Email", "email", "you@example.com")
         + _input_field("password", "Password", "password", "Your password")
     )
     return _auth_page(
@@ -384,22 +384,22 @@ def login_page(request: Request):
 @app.post("/login", response_class=HTMLResponse)
 def login_submit(
     request: Request,
-    username: str = Form(),
+    email: str = Form(),
     password: str = Form(),
 ):
     fields = (
-        _input_field("username", "Username", placeholder="Your username")
+        _input_field("email", "Email", "email", "you@example.com")
         + _input_field("password", "Password", "password", "Your password")
     )
     footer = 'Don\'t have an account? <a href="/register" class="text-indigo-400 hover:text-indigo-300">Register</a>'
 
     db = _get_db()
-    row = db.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+    row = db.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
     db.close()
 
     if not row or not bcrypt.checkpw(password.encode(), row["password_hash"].encode()):
         return _auth_page("Login", "/login", fields, "Sign In", footer,
-                          error="Invalid username or password.")
+                          error="Invalid email or password.")
 
     token = _serializer.dumps({"username": row["username"], "email": row["email"]})
     response = RedirectResponse("/", status_code=302)

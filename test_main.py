@@ -148,7 +148,7 @@ def test_login_page_returns_html():
     response = client.get("/login")
     assert response.status_code == 200
     assert "Login" in response.text
-    assert 'name="username"' in response.text
+    assert 'name="email"' in response.text
     assert 'name="password"' in response.text
 
 
@@ -206,7 +206,7 @@ def test_login_valid_credentials():
     )
     response = client.post(
         "/login",
-        data={"username": "loginuser", "password": "secret123"},
+        data={"email": "login@example.com", "password": "secret123"},
         follow_redirects=False,
     )
     assert response.status_code == 302
@@ -222,20 +222,20 @@ def test_login_invalid_password():
     )
     response = client.post(
         "/login",
-        data={"username": "wrongpw", "password": "wrongpassword"},
+        data={"email": "wrong@example.com", "password": "wrongpassword"},
     )
     assert response.status_code == 200
-    assert "Invalid username or password" in response.text
+    assert "Invalid email or password" in response.text
 
 
 def test_login_nonexistent_user():
     _cleanup_db()
     response = client.post(
         "/login",
-        data={"username": "noone", "password": "whatever"},
+        data={"email": "noone@example.com", "password": "whatever"},
     )
     assert response.status_code == 200
-    assert "Invalid username or password" in response.text
+    assert "Invalid email or password" in response.text
 
 
 def test_logout_clears_session():
